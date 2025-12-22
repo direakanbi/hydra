@@ -18,7 +18,7 @@ class HydraCrawler:
     
     def _is_valid_url(self, url):
         """
-        Helper function to check if a URL is valid.
+        helper function to check if a URL is valid.
         """
         try:
             result = urlparse(url)
@@ -27,15 +27,15 @@ class HydraCrawler:
             return False
 
     def crawl_page(self):
-        """
-        Fetches the content of the start_url and extracts all links.
-        Separates links into internal and external.
-        """
+        """ fetches the content of the start_url and extracts all links. """
+        
+       """ separates links into internal and external. """
+       
         print(f"[*] Crawling: {self.start_url}")
         
         try:
             response = requests.get(self.start_url, timeout=10)
-            # Raise an HTTPError if the response was an HTTP error
+            # raise an HTTPError if the response was an HTTP error
             response.raise_for_status()
             
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -43,15 +43,15 @@ class HydraCrawler:
             for a_tag in soup.find_all('a', href=True):
                 href = a_tag.get('href')
                 
-                # Resolve relative URLs
+                # resolve relative URLs
                 full_url = urljoin(self.start_url, href)
                 
                 if self._is_valid_url(full_url):
                     if urlparse(self.start_url).netloc == urlparse(full_url).netloc:
-                        # Internal link (same domain)
+                        # internal link for the same domain
                         self.internal_links.add(full_url)
                     else:
-                        # External link (different domain)
+                        # external link for different domains
                         self.external_links.add(full_url)
                         
             print("[+] Crawling complete.")
@@ -64,7 +64,7 @@ class HydraCrawler:
 #test use case
 if __name__ == "__main__":
     
-    target_url = "http://ums.caleb university.edu.ng" 
+    target_url = "http://ums.caleb university.edu.ng" #hopefully i don't get sued 
     
     crawler = HydraCrawler(target_url)
     crawler.crawl_page()
