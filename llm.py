@@ -1,38 +1,53 @@
 import os
-from groq import Groq
+from openai import OpenAI
 from dotenv import load_dotenv
 
-# This function will find the .env file and load its contents
-# into the environment for this script.
-load_dotenv() 
+# Load environment variables
+load_dotenv()
 
-# Retrieve the API key from the now-loaded environment variables
-api_key = os.environ.get("GROQ_API_KEY")
+class LLMClient:
+    """
+    Client for interacting with LLM models via OpenRouter (using OpenAI compatibility).
+    """
+    
+    def __init__(self, api_key=None):
+        """Initializes the LLMClient with API credentials."""
+        self.api_key = api_key or os.environ.get("OPENROUTER_API_KEY")
+        if not self.api_key:
+            raise ValueError("OPENROUTER_API_KEY not found in environment.")
+            
+        self.client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=self.api_key
+        )
+        
+    def generate_completion(self, messages, model="openrouter/free"):
+        """
+        Sends a list of messages to the specified LLM model and returns the response content.
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                max_tokens=4000,
+                extra_headers={
+                    "HTTP-Referer": "https://github.com/hydra-security/hydra",
+                    "X-Title": "Hydra Security Agent"
+                }
+            )
+            return response.choices[0].message.content
+            
+        except Exception as e:
+            # Re-raise or log as needed for higher level error handling
+            raise Exception(f"Failed to generate completion: {e}")
 
-if not api_key:
-    print("Error: GROQ_API_KEY is not set. Please ensure you have a .env file in your project root with the correct key.")
-    exit()
-
-# Initialize the Groq client
-client = Groq(api_key=api_key)
-
-print("[*] Sending test request to Groq API...")
-
-try:
-    chat_completion = client.chat.completions.create(
-        messages=[
-            {
-                "role": "user",
-                "content": "Give me a simple, one-paragraph overview of the Llama 3 model.",
-            }
-        ],
-        model="llama-3.1-8b-instant",  # A small, fast model for our tests
-    )
-
-    response_content = chat_completion.choices[0].message.content
-    print("\n--- Response from Llama 3 ---")
-    print(response_content)
-    print("\n[+] Connection successful.")
-
-except Exception as e:
-    print(f"[-] An error occurred: {e}")
+# Maintain backwards compatibility or simple test script if run directly
+if __name__ == "__main__":
+    try:
+        client = LLMClient()
+        test_messages = [{"role": "user", "content": "What is security testing?"}]
+        response = client.generate_completion(test_messages)
+        print("\n--- Response ---")
+        print(response)
+    except Exception as e:
+        print(colored(f"Error: {e}", "red"))
