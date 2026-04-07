@@ -5,4 +5,5 @@ __pycache__/
 *.pyc
 hydra_state.db
 .pytest_cache/
-hydra_report.md
+hydra_report.md
+hydra_report.txt

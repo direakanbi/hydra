@@ -1,32 +1,27 @@
 import sqlite3
-import os
+from datetime import datetime
+import hydra_ui as ui
 
 class StateStore:
     """
-    Manages the persistent state of the Hydra security agent using SQLite.
-    Stores URLs, findings, and metadata to ensure scan resumption and deduplication.
+    The persistent memory of the Hydra.
+    Manages URLs to crawl and security findings using SQLite.
     """
     
     def __init__(self, db_path="hydra_state.db"):
         self.db_path = db_path
-        self._initialize_db()
+        self._init_db()
         
-    def _initialize_db(self):
-        """Creates the necessary tables if they don't exist."""
+    def _init_db(self):
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            
-            # Table for tracking URL crawl status
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS crawl_state (
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS urls (
                     url TEXT PRIMARY KEY,
                     status TEXT DEFAULT 'pending',
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    timestamp DATETIME
                 )
             """)
-            
-            # Table for tracking site findings (Vulnerabilities)
-            cursor.execute("""
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS findings (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     url TEXT,
@@ -36,59 +31,38 @@ class StateStore:
                     evidence TEXT,
                     confidence TEXT,
                     poc TEXT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    timestamp DATETIME
                 )
             """)
-            
-            # Migration: Ensure 'poc' column exists in case the table was created previously
-            try:
-                cursor.execute("ALTER TABLE findings ADD COLUMN poc TEXT")
-            except sqlite3.OperationalError:
-                pass # Column already exists
-            
-            conn.commit()
-            
-    def add_url(self, url, status="pending"):
-        """Adds a URL to the crawl queue."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT OR IGNORE INTO crawl_state (url, status) VALUES (?, ?)",
-                (url, status)
-            )
-            conn.commit()
+
+    def add_url(self, url, status='pending'):
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("INSERT OR IGNORE INTO urls (url, status, timestamp) VALUES (?, ?, ?)",
+                             (url, status, datetime.now()))
+        except Exception as e:
+            ui.error(f"Failed to add URL to state: {e}")
 
     def update_url_status(self, url, status):
-        """Updates the status of a specific URL (e.g., from 'pending' to 'visited')."""
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE crawl_state SET status = ? WHERE url = ?",
-                (status, url)
-            )
-            conn.commit()
+            conn.execute("UPDATE urls SET status = ?, timestamp = ? WHERE url = ?",
+                         (status, datetime.now(), url))
 
     def get_pending_urls(self):
-        """Returns a list of all URLs with 'pending' status."""
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT url FROM crawl_state WHERE status = 'pending'")
+            cursor = conn.execute("SELECT url FROM urls WHERE status = 'pending'")
             return [row[0] for row in cursor.fetchall()]
-            
-    def add_finding(self, url, f_type, severity, description, evidence, confidence, poc=""):
-        """Records a security finding in the database."""
+
+    def add_finding(self, url, f_type, severity, description, evidence, confidence, poc=''):
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO findings (url, type, severity, description, evidence, confidence, poc)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (url, f_type, severity, description, evidence, confidence, poc))
-            conn.commit()
+            conn.execute("""
+                INSERT INTO findings (url, type, severity, description, evidence, confidence, poc, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (url, f_type, severity, description, evidence, confidence, poc, datetime.now()))
+        ui.success(f"Persisted finding: {f_type} at {url}")
 
     def _get_all_findings(self):
-        """Internal helper to retrieve all findings for reporting."""
         with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row  # Access by column name
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM findings")
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("SELECT * FROM findings ORDER BY severity DESC")
             return [dict(row) for row in cursor.fetchall()]

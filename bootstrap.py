@@ -1,81 +1,85 @@
 import os
 import sys
 import subprocess
+import venv
+from hydra_ui import init_ui, print_banner, info, success, warning, error, input_prompt, BOLD, RESET
 
-# ANSI Color Codes
-GREEN = "\033[92m"
-YELLOW = "\033[93m"
-RED = "\033[91m"
-BLUE = "\033[94m"
-CYAN = "\033[96m"
-BOLD = "\033[1m"
-RESET = "\033[0m"
+def setup_venv():
+    """Creates a virtual environment if it doesn't exist."""
+    if not os.path.exists("venv"):
+        info("Virtual environment not found. Creating 'venv'...")
+        venv.create("venv", with_pip=True)
+        success("Virtual environment created successfully.")
+    return True
 
-BANNER = f"""
-{CYAN}{BOLD}
-    __  Transitions
-   / / / /_  ______  / /________ _
-  / /_/ / / / / __ \/ ___/ __ `/
- / __  / /_/ / /_/ / /  / /_/ /
-/_/ /_/\__, / .___/_/   \__,_/ {RESET}{MAGENTA if 'MAGENTA' in globals() else '\033[95m'}(V2){RESET}{CYAN}
-      /____/_/                 {RESET}
-      
-    {BOLD}The AI-Powered Security Multi-Head Agent{RESET}
-    {BLUE}Created by: {BOLD}@direakanbi{RESET}
-    {BLUE}GitHub: {BOLD}https://github.com/direakanbi/hydra{RESET}
-"""
-
-def check_env():
-    """Verifies that the .env file exists and contains the required key."""
-    if not os.path.exists(".env"):
-        print(f"{RED}[!] Error: '.env' file not found.{RESET}")
-        print(f"{YELLOW}[*] Please create a '.env' file with your OPENROUTER_API_KEY.{RESET}")
+def install_dependencies():
+    """Installs requirements from requirements.txt."""
+    venv_pip = os.path.join("venv", "Scripts", "pip.exe") if os.name == 'nt' else os.path.join("venv", "bin", "pip")
+    
+    if not os.path.exists("requirements.txt"):
+        error("requirements.txt not found.")
         return False
+
+    info("Checking and installing dependencies...")
+    try:
+        subprocess.run([venv_pip, "install", "-r", "requirements.txt"], check=True, capture_output=True)
+        # Install Playwright browsers
+        venv_playwright = os.path.join("venv", "Scripts", "playwright.exe") if os.name == 'nt' else os.path.join("venv", "bin", "playwright")
+        info("Installing Playwright browser binaries (Chromium)...")
+        subprocess.run([venv_playwright, "install", "chromium"], check=True, capture_output=True)
+        success("All dependencies installed.")
+        return True
+    except subprocess.CalledProcessError as e:
+        error(f"Failed to install dependencies: {e}")
+        return False
+
+def configure_env():
+    """Interactively configures the .env file if missing."""
+    if not os.path.exists(".env"):
+        warning(".env configuration missing.")
+        api_key = input_prompt("Please enter your OpenRouter API Key: ").strip()
         
-    with open(".env", "r") as f:
-        content = f.read()
-        if "OPENROUTER_API_KEY" not in content or "your_key_here" in content:
-            print(f"{RED}[!] Error: OPENROUTER_API_KEY is not set correctly in .env.{RESET}")
+        if not api_key:
+            error("API Key cannot be empty. Setup aborted.")
             return False
+            
+        with open(".env", "w") as f:
+            f.write(f"OPENROUTER_API_KEY={api_key}\n")
+        success(".env file created and configured.")
     return True
 
 def run_scan():
-    """Prompts for target and launches hydra.py using the 3.12 venv."""
-    if not check_env():
-        return
-        
-    print(f"{BLUE}[?] Target Setup{RESET}")
-    target = input(f"    Enter the target URL to scan (e.g., http://example.com): ")
+    """Master entry point for setup and launching Hydra."""
+    init_ui()
+    print_banner()
     
-    if not target.strip():
-        print(f"{RED}[!] Error: Target URL cannot be empty.{RESET}")
+    # 1. Environment Setup
+    if not setup_venv(): return
+    if not install_dependencies(): return
+    if not configure_env(): return
+    
+    # 2. Target Input
+    print(f"\n{BOLD}Target Setup{RESET}")
+    target = input_prompt("Enter the target URL to scan (e.g., http://example.com): ").strip()
+    
+    if not target:
+        error("Target URL cannot be empty.")
         return
 
     if not target.startswith("http"):
-        print(f"{RED}[!] Error: Invalid URL. Please include http:// or https://{RESET}")
+        error("Invalid URL format. Please include http:// or https://")
         return
         
-    # python executable in the venv
-    venv_python = os.path.join("venv", "Scripts", "python.exe")
+    # 3. Launch Orchestrator
+    venv_python = os.path.join("venv", "Scripts", "python.exe") if os.name == 'nt' else os.path.join("venv", "bin", "python")
     
-    if not os.path.exists(venv_python):
-        print(f"{RED}[!] Error: Virtual environment 'venv' not found.{RESET}")
-        print(f"{YELLOW}[*] Run 'py -3.12 -m venv venv' then 'pip install -r requirements.txt' first.{RESET}")
-        return
-        
-    print(f"\n{GREEN}[*] Initializing Hydra Engine...{RESET}")
+    info(f"Initializing Hydra Engine for {BOLD}{target}{RESET}...")
     try:
         subprocess.run([venv_python, "hydra.py", target], check=True)
     except KeyboardInterrupt:
-        print(f"\n{RED}[!] Scan interrupted by user.{RESET}")
+        warning("Scan interrupted by user.")
     except Exception as e:
-        print(f"\n{RED}[!] An error occurred during scan: {e}{RESET}")
+        error(f"Scan failed: {e}")
 
 if __name__ == "__main__":
-    # Initialize colorama/windows support if on windows
-    if os.name == 'nt':
-        os.system('color')
-        
-    print(BANNER)
     run_scan()
-

@@ -1,8 +1,8 @@
 import asyncio
-import re
 from urllib.parse import urljoin, urlparse
 from playwright.async_api import async_playwright
 from hydra_s import StateStore
+import hydra_ui as ui
 
 class PlaywrightCrawler:
     """
@@ -22,50 +22,35 @@ class PlaywrightCrawler:
         return urlparse(url).netloc == self.base_domain
         
     def _normalize_url(self, url):
-        """
-        Heuristic template normalization. 
-        Removes query parameters and fragments to identify unique page 'templates'.
-        """
+        """Removes query parameters and fragments to identify unique page 'templates'."""
         parsed = urlparse(url)
         return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
 
     async def crawl_page(self, url):
-        """
-        Fetches a page with Playwright, extracts data, and updates the StateStore.
-        Returns a dictionary of findings for the Analyzer.
-        """
+        """Fetches a page with Playwright, extracts data, and updates the StateStore."""
         async with async_playwright() as p:
-            # We use an incognito-style context to avoid side effects
             browser = await p.chromium.launch(headless=True)
             context = await browser.new_context()
             page = await context.new_page()
             
-            print(f"[*] Browsing: {url}")
+            ui.info(f"Crawling: {url}")
             
             try:
                 response = await page.goto(url, wait_until="networkidle", timeout=30000)
                 if not response:
-                    print(f"[-] No response from {url}")
+                    ui.error(f"No response from {url}")
                     return {}
                 
-                # 1. Capture Headers
                 headers = response.headers
-                
-                # 2. Extract Links
-                links = await page.evaluate("""
-                    () => Array.from(document.querySelectorAll('a[href]')).map(a => a.href)
-                """)
+                links = await page.evaluate("() => Array.from(document.querySelectorAll('a[href]')).map(a => a.href)")
                 
                 for link in links:
                     full_url = urljoin(url, link)
                     if self._is_internal(full_url):
-                        # Normalize to avoid scanning same template (e.g. /product/1 vs /product/2)
                         normalized = self._normalize_url(full_url)
                         if normalized not in self.visited_templates:
                             self.store.add_url(full_url, status="pending")
-                            # We keep the raw URL in the queue but the normalized one in our 'templates' filter
                 
-                # 3. Extract Forms
                 forms = await page.evaluate("""
                     () => Array.from(document.querySelectorAll('form')).map(form => {
                         return {
@@ -81,33 +66,17 @@ class PlaywrightCrawler:
                     })
                 """)
                 
-                page_data = {
-                    "url": url,
-                    "headers": headers,
-                    "forms": forms,
-                    "links": links
-                }
+                page_data = {"url": url, "headers": headers, "forms": forms, "links": links}
                 
-                # Mark as visited in the store
+                # Mark as visited
                 self.store.update_url_status(url, "visited")
                 self.visited_templates.add(self._normalize_url(url))
                 
-                print(f"[+] Crawl complete for {url}. Found {len(links)} links and {len(forms)} forms.")
-                
+                ui.success(f"Crawl complete for {url}. Found {len(links)} links and {len(forms)} forms.")
                 return page_data
 
             except Exception as e:
-                print(f"[-] Error crawling {url}: {e}")
+                ui.error(f"Error crawling {url}: {e}")
                 return {}
             finally:
                 await browser.close()
-
-# test use case
-if __name__ == "__main__":
-    async def run_test():
-        store = StateStore("hydra_test.db")
-        target = "https://example.com"
-        crawler = PlaywrightCrawler(target, store)
-        await crawler.crawl_page(target)
-        
-    asyncio.run(run_test())
