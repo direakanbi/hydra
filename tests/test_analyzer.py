@@ -1,18 +1,23 @@
 import pytest
 import json
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from hydra_a import SecurityAnalyzer
 
 @pytest.fixture
 def mock_llm():
     return MagicMock()
 
+@pytest.fixture
+def mock_ui():
+    with patch('hydra_a.ui') as mock:
+        yield mock
+
 def test_analyzer_initialization(mock_llm):
     analyzer = SecurityAnalyzer(mock_llm)
     assert analyzer.llm == mock_llm
 
 @pytest.mark.asyncio
-async def test_analyze_page_finds_vulnerability(mock_llm):
+async def test_analyze_page_finds_vulnerability(mock_llm, mock_ui):
     """Test that the analyzer identifies vulnerabilities from crawler data."""
     
     # Mock Analyzer Output
@@ -52,9 +57,10 @@ async def test_analyze_page_finds_vulnerability(mock_llm):
     assert len(findings) == 1
     assert findings[0]["type"] == "SQL Injection"
     assert findings[0]["confidence_score"] == 0.9
+    mock_ui.discovery.assert_called()
 
 @pytest.mark.asyncio
-async def test_analyzer_critic_rejects_false_positive(mock_llm):
+async def test_analyzer_critic_rejects_false_positive(mock_llm, mock_ui):
     """Test that the critic pass filters out false positives."""
     
     # Analyzer flags something
@@ -81,3 +87,4 @@ async def test_analyzer_critic_rejects_false_positive(mock_llm):
     
     # Findings should be filtered out due to low score/verdict
     assert len(findings) == 0
+    mock_ui.info.assert_called_with("Critic rejected finding: XSS (Score: 0.2)")

@@ -40,6 +40,7 @@ def test_generate_completion(mock_openai, mocker):
     mock_openai.chat.completions.create.assert_called_once_with(
         model="google/gemini-pro-1.5",
         messages=[{"role": "user", "content": "Hello"}],
+        max_tokens=4000,
         extra_headers={
             "HTTP-Referer": "https://github.com/hydra-security/hydra",
             "X-Title": "Hydra Security Agent"
