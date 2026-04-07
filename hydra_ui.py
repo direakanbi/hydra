@@ -12,12 +12,12 @@ RESET = "\033[0m"
 
 BANNER = f"""
 {CYAN}{BOLD}
-    __  Transitions
-   / / / /_  ______  / /________ _
-  / /_/ / / / / __ \/ ___/ __ `/
+    __  __           _             
+   / / / /_  _______/ /___________ _
+  / /_/ / / / / __  / ___/ __ `/
  / __  / /_/ / /_/ / /  / /_/ /
-/_/ /_/\__, / .___/_/   \__,_/ {RESET}{MAGENTA}(V2){RESET}{CYAN}
-      /____/_/                 {RESET}
+/_/ /_/\__, /\__,_/_/   \__,_/ {RESET}{MAGENTA}(V2){RESET}{CYAN}
+      /____/                   {RESET}
       
     {BOLD}The AI-Powered Security Multi-Head Agent{RESET}
     {BLUE}Created by: {BOLD}@direakanbi{RESET}
